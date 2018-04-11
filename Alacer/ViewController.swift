@@ -7,19 +7,147 @@
 //
 
 import UIKit
+import AVFoundation
 
 class ViewController: UIViewController {
+    let engine = AVAudioEngine()
+    let queue = DispatchQueue(label: "au.com.resapphealth.alacer", qos: .background)
+    var converter: AVAudioConverter!
+    var microphone: AVAudioInputNode!
+
+    enum Format {
+        case pcmF, pcmI, aac, alac
+    }
+
+    let sampleRate = 44100.0
+    let format = Format.pcmF
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        // Do any additional setup after loading the view, typically from a nib.
+
+        configure()
+
+        // Set up the microphone
+        microphone = engine.inputNode
+
+        // Converter
+        let cf = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: sampleRate, channels: 1, interleaved: true)!
+        converter = AVAudioConverter(from: microphone.inputFormat(forBus: 0), to: cf)
+
+        // File for writing
+        let url = try! FileManager.default.url(for: .documentDirectory, in: .userDomainMask, appropriateFor: nil, create: true).appendingPathComponent(UUID().uuidString).appendingPathExtension(fileExtension)
+        let file = try! AVAudioFile(forWriting: url, settings: fileFormat, commonFormat: cf.commonFormat, interleaved: cf.isInterleaved)
+
+        // Tap the microphone and write the output
+        let size = AVAudioFrameCount(microphone.inputFormat(forBus: 0).sampleRate / 10)
+        microphone.installTap(onBus: 0, bufferSize: size, format: nil) { buffer, time in
+            guard let b = buffer.copy() as? AVAudioPCMBuffer else { return }
+            self.queue.async {
+                try! file.write(from: self.convert(buffer: b))
+            }
+        }
     }
 
-    override func didReceiveMemoryWarning() {
-        super.didReceiveMemoryWarning()
-        // Dispose of any resources that can be recreated.
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+
+        // Record for 3 seconds
+        try! engine.start()
+        DispatchQueue.main.asyncAfter(deadline: DispatchTime.now() + 3) {
+            self.engine.stop()
+        }
     }
 
+    var fileFormat: [String: Any] {
+        switch format {
+        case .pcmF:
+            return AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: sampleRate, channels: 1, interleaved: true)!.settings
+        case .pcmI:
+            return AVAudioFormat(commonFormat: .pcmFormatInt32, sampleRate: sampleRate, channels: 1, interleaved: true)!.settings
+        case .aac:
+            return [
+                AVFormatIDKey: kAudioFormatMPEG4AAC,
+                AVAudioFileTypeKey: kAudioFileMPEG4Type,
+                AVSampleRateKey: sampleRate,
+                AVNumberOfChannelsKey: 1,
+                AVEncoderBitRatePerChannelKey: 32,
+                AVEncoderAudioQualityKey: AVAudioQuality.high
+            ]
+        case .alac:
+            return [
+                AVFormatIDKey: kAudioFormatAppleLossless,
+                AVAudioFileTypeKey: kAudioFileM4AType,
+                AVSampleRateKey: sampleRate,
+                AVNumberOfChannelsKey: 1
+            ]
+        }
+    }
 
+    var fileExtension: String {
+        switch format {
+        case .pcmF, .pcmI: return "caf"
+        case .aac, .alac: return "m4a"
+        }
+    }
 }
 
+extension ViewController {
+    func configure() {
+        let session = AVAudioSession.sharedInstance()
+        try! session.setCategory(AVAudioSessionCategoryPlayAndRecord,
+                                 mode: AVAudioSessionModeMeasurement,
+                                 options: .defaultToSpeaker)
+        try! session.setActive(true)
+
+        // Set the preferred sample rate and channel count
+        // NB: These are required to set the hardware to a mono only mose
+        // that doesn't engage the noise cancelling system if the ear piece
+        // mic is coverred—even though AVAudioEngine still delivers a stereo
+        // input.
+        try! session.setPreferredSampleRate(44100)
+        try! session.setPreferredInputNumberOfChannels(1)
+
+        // Enforce the the built-in bottom mic, in case other inputs have
+        // been added or are active.
+        // NB: The built in bottom mic does not have/support data sources,
+        // so there is no need/way to filter and set a preferred data
+        // source.
+        try! session.availableInputs?
+            .filter { $0.portType == AVAudioSessionPortBuiltInMic }
+            .forEach(session.setPreferredInput)
+    }
+
+    func convert(buffer: AVAudioPCMBuffer) -> AVAudioPCMBuffer {
+        guard let converter = converter else { return buffer }
+
+        let sampleRateIn = converter.inputFormat.sampleRate
+        let sampleRateOut = converter.outputFormat.sampleRate
+        guard sampleRateOut > 0 else { return buffer }
+
+        let sampleRateConversionRatio: Double = sampleRateIn/sampleRateOut
+        let capacity = UInt32(Double(buffer.frameCapacity) / sampleRateConversionRatio)
+
+        guard let outputBuffer = AVAudioPCMBuffer(pcmFormat: converter.outputFormat, frameCapacity: capacity) else {
+            return buffer
+        }
+
+        var processed = false
+        let inputBlock: AVAudioConverterInputBlock = { inNumPackets, outStatus in
+            guard !processed else {
+                outStatus.pointee = AVAudioConverterInputStatus.noDataNow
+                return nil
+            }
+            processed = true
+            outStatus.pointee = AVAudioConverterInputStatus.haveData
+            return buffer
+        }
+
+        var error: NSError?
+        let status = converter.convert(to: outputBuffer, error: &error, withInputFrom: inputBlock)
+        if let error = error, status == .error {
+            print(error.localizedDescription)
+        }
+
+        return outputBuffer
+    }
+}
