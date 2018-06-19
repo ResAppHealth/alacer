@@ -15,12 +15,7 @@ class ViewController: UIViewController {
     var converter: AVAudioConverter!
     var microphone: AVAudioInputNode!
 
-    enum Format {
-        case pcmF, pcmI, aac, alac
-    }
-
     let sampleRate = 44100.0
-    let format = Format.pcmF
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -35,15 +30,19 @@ class ViewController: UIViewController {
         converter = AVAudioConverter(from: microphone.inputFormat(forBus: 0), to: cf)
 
         // File for writing
-        let url = try! FileManager.default.url(for: .documentDirectory, in: .userDomainMask, appropriateFor: nil, create: true).appendingPathComponent(UUID().uuidString).appendingPathExtension(fileExtension)
-        let file = try! AVAudioFile(forWriting: url, settings: fileFormat, commonFormat: cf.commonFormat, interleaved: cf.isInterleaved)
+        let url = try! FileManager.default
+            .url(for: .documentDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
+            .appendingPathComponent(UUID().uuidString)
+            .appendingPathExtension("m4a")
+        let file = try! AVAudioFile(forWriting: url, settings: fileFormat)
 
         // Tap the microphone and write the output
         let size = AVAudioFrameCount(microphone.inputFormat(forBus: 0).sampleRate / 10)
         microphone.installTap(onBus: 0, bufferSize: size, format: nil) { buffer, time in
             guard let b = buffer.copy() as? AVAudioPCMBuffer else { return }
             self.queue.async {
-                try! file.write(from: self.convert(buffer: b))
+                let bb = self.convert(buffer: b)
+                try! file.write(from: bb)
             }
         }
     }
@@ -59,35 +58,15 @@ class ViewController: UIViewController {
     }
 
     var fileFormat: [String: Any] {
-        switch format {
-        case .pcmF:
-            return AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: sampleRate, channels: 1, interleaved: true)!.settings
-        case .pcmI:
-            return AVAudioFormat(commonFormat: .pcmFormatInt32, sampleRate: sampleRate, channels: 1, interleaved: true)!.settings
-        case .aac:
-            return [
-                AVFormatIDKey: kAudioFormatMPEG4AAC,
-                AVAudioFileTypeKey: kAudioFileMPEG4Type,
-                AVSampleRateKey: sampleRate,
-                AVNumberOfChannelsKey: 1,
-                AVEncoderBitRatePerChannelKey: 32,
-                AVEncoderAudioQualityKey: AVAudioQuality.high
-            ]
-        case .alac:
-            return [
-                AVFormatIDKey: kAudioFormatAppleLossless,
-                AVAudioFileTypeKey: kAudioFileM4AType,
-                AVSampleRateKey: sampleRate,
-                AVNumberOfChannelsKey: 1
-            ]
-        }
-    }
-
-    var fileExtension: String {
-        switch format {
-        case .pcmF, .pcmI: return "caf"
-        case .aac, .alac: return "m4a"
-        }
+        return [
+            AVFormatIDKey: kAudioFormatAppleLossless,
+            AVLinearPCMIsFloatKey: false,
+            AVAudioFileTypeKey: kAudioFileM4AType,
+            AVSampleRateKey: sampleRate,
+            AVNumberOfChannelsKey: 1,
+            AVEncoderBitRatePerChannelKey: 16,
+            AVLinearPCMIsBigEndianKey: false
+        ]
     }
 }
 
