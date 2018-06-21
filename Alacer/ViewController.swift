@@ -17,6 +17,9 @@ class ViewController: UIViewController {
 
     let sampleRate = 44100.0
 
+    let commonFormat: AVAudioCommonFormat = .pcmFormatInt16
+
+
     override func viewDidLoad() {
         super.viewDidLoad()
 
@@ -26,7 +29,7 @@ class ViewController: UIViewController {
         microphone = engine.inputNode
 
         // Converter
-        let cf = AVAudioFormat(commonFormat: .pcmFormatInt16, sampleRate: sampleRate, channels: 1, interleaved: true)!
+        let cf = AVAudioFormat(commonFormat: commonFormat, sampleRate: sampleRate, channels: 1, interleaved: true)!
         converter = AVAudioConverter(from: microphone.inputFormat(forBus: 0), to: cf)
 
         // File for writing
@@ -35,7 +38,7 @@ class ViewController: UIViewController {
             .appendingPathComponent(UUID().uuidString)
             .appendingPathExtension("m4a")
 
-        let file = try! AVAudioFile(forWriting: url, settings: fileFormat, commonFormat: .pcmFormatInt16, interleaved: true)
+        let file = try! AVAudioFile(forWriting: url, settings: fileFormat, commonFormat: commonFormat, interleaved: true)
 
         // Tap the microphone and write the output
         let size = AVAudioFrameCount(microphone.inputFormat(forBus: 0).sampleRate / 10)
