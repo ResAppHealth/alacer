@@ -26,7 +26,7 @@ class ViewController: UIViewController {
         microphone = engine.inputNode
 
         // Converter
-        let cf = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: sampleRate, channels: 1, interleaved: true)!
+        let cf = AVAudioFormat(commonFormat: .pcmFormatInt16, sampleRate: sampleRate, channels: 1, interleaved: true)!
         converter = AVAudioConverter(from: microphone.inputFormat(forBus: 0), to: cf)
 
         // File for writing
@@ -34,7 +34,8 @@ class ViewController: UIViewController {
             .url(for: .documentDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
             .appendingPathComponent(UUID().uuidString)
             .appendingPathExtension("m4a")
-        let file = try! AVAudioFile(forWriting: url, settings: fileFormat)
+
+        let file = try! AVAudioFile(forWriting: url, settings: fileFormat, commonFormat: .pcmFormatInt16, interleaved: true)
 
         // Tap the microphone and write the output
         let size = AVAudioFrameCount(microphone.inputFormat(forBus: 0).sampleRate / 10)
@@ -60,12 +61,9 @@ class ViewController: UIViewController {
     var fileFormat: [String: Any] {
         return [
             AVFormatIDKey: kAudioFormatAppleLossless,
-            AVLinearPCMIsFloatKey: false,
             AVAudioFileTypeKey: kAudioFileM4AType,
             AVSampleRateKey: sampleRate,
             AVNumberOfChannelsKey: 1,
-            AVEncoderBitRatePerChannelKey: 16,
-            AVLinearPCMIsBigEndianKey: false
         ]
     }
 }
