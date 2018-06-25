@@ -37,7 +37,7 @@ class ViewController: UIViewController {
         let url = try! FileManager.default
             .url(for: .documentDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
             .appendingPathComponent(UUID().uuidString)
-            .appendingPathExtension("m4a")
+            .appendingPathExtension("flac")
 
         file = try! AVAudioFile(forWriting: url, settings: fileFormat, commonFormat: commonFormat, interleaved: true)
 
@@ -66,8 +66,8 @@ class ViewController: UIViewController {
 
     var fileFormat: [String: Any] {
         return [
-            AVFormatIDKey: kAudioFormatAppleLossless,
-            AVAudioFileTypeKey: kAudioFileM4AType,
+            AVFormatIDKey: kAudioFormatFLAC,
+            AVAudioFileTypeKey: kAudioFileFLACType,
             AVSampleRateKey: sampleRate,
             AVNumberOfChannelsKey: 1,
         ]
