@@ -19,6 +19,7 @@ class ViewController: UIViewController {
 
     let commonFormat: AVAudioCommonFormat = .pcmFormatInt16
 
+    var file: AVAudioFile?
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -38,7 +39,7 @@ class ViewController: UIViewController {
             .appendingPathComponent(UUID().uuidString)
             .appendingPathExtension("m4a")
 
-        let file = try! AVAudioFile(forWriting: url, settings: fileFormat, commonFormat: commonFormat, interleaved: true)
+        file = try! AVAudioFile(forWriting: url, settings: fileFormat, commonFormat: commonFormat, interleaved: true)
 
         // Tap the microphone and write the output
         let size = AVAudioFrameCount(microphone.inputFormat(forBus: 0).sampleRate / 10)
@@ -46,7 +47,7 @@ class ViewController: UIViewController {
             guard let b = buffer.copy() as? AVAudioPCMBuffer else { return }
             self.queue.async {
                 let bb = self.convert(buffer: b)
-                try! file.write(from: bb)
+                try! self.file?.write(from: bb)
             }
         }
     }
@@ -58,6 +59,8 @@ class ViewController: UIViewController {
         try! engine.start()
         DispatchQueue.main.asyncAfter(deadline: DispatchTime.now() + 3) {
             self.engine.stop()
+            self.microphone.removeTap(onBus: 0)
+            self.file = nil
         }
     }
 
