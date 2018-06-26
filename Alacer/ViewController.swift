@@ -19,7 +19,8 @@ class ViewController: UIViewController {
 
     let commonFormat: AVAudioCommonFormat = .pcmFormatInt16
 
-    var file: AVAudioFile?
+    var flacFile: AVAudioFile?
+    var pcmFile: AVAudioFile?
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -39,7 +40,10 @@ class ViewController: UIViewController {
             .appendingPathComponent(UUID().uuidString)
             .appendingPathExtension("flac")
 
-        file = try! AVAudioFile(forWriting: url, settings: fileFormat, commonFormat: commonFormat, interleaved: true)
+        let pcmURL = url.deletingPathExtension().appendingPathExtension("caf")
+
+        flacFile = try! AVAudioFile(forWriting: url, settings: flacFileFormat, commonFormat: commonFormat, interleaved: true)
+        pcmFile = try! AVAudioFile(forWriting: pcmURL, settings: pcmFileFormat, commonFormat: commonFormat, interleaved: true)
 
         // Tap the microphone and write the output
         let size = AVAudioFrameCount(microphone.inputFormat(forBus: 0).sampleRate / 10)
@@ -47,7 +51,8 @@ class ViewController: UIViewController {
             guard let b = buffer.copy() as? AVAudioPCMBuffer else { return }
             self.queue.async {
                 let bb = self.convert(buffer: b)
-                try! self.file?.write(from: bb)
+                try! self.flacFile?.write(from: bb)
+                try! self.pcmFile?.write(from: bb)
             }
         }
     }
@@ -60,11 +65,13 @@ class ViewController: UIViewController {
         DispatchQueue.main.asyncAfter(deadline: DispatchTime.now() + 3) {
             self.engine.stop()
             self.microphone.removeTap(onBus: 0)
-            self.file = nil
+            self.flacFile = nil
+            self.pcmFile = nil
+            print("done")
         }
     }
 
-    var fileFormat: [String: Any] {
+    var flacFileFormat: [String: Any] {
         return [
             AVFormatIDKey: kAudioFormatFLAC,
             AVAudioFileTypeKey: kAudioFileFLACType,
@@ -72,6 +79,19 @@ class ViewController: UIViewController {
             AVNumberOfChannelsKey: 1,
         ]
     }
+
+    var pcmFileFormat: [String: Any] {
+        return [
+            AVFormatIDKey: kAudioFormatLinearPCM,
+            AVSampleRateKey: sampleRate,
+            AVNumberOfChannelsKey: 1,
+            AVLinearPCMIsNonInterleaved: false,
+            AVLinearPCMBitDepthKey: 16,
+            AVLinearPCMIsBigEndianKey: false,
+            AVLinearPCMIsFloatKey: false
+        ]
+    }
+
 }
 
 extension ViewController {
